@@ -1,0 +1,20 @@
+{
+  "name": "mcp-gemini-demo",
+  "version": "1.0.0",
+  "description": "MCP server and client demo with Gemini AI integration",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "server": "node server.js",
+    "client": "node client.js",
+    "test": "node test.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^0.5.0",
+    "node-fetch": "^3.3.2",
+    "dotenv": "^16.3.1"
+  },
+  "keywords": ["mcp", "gemini", "ai", "demo"],
+  "author": "MCP Demo",
+  "license": "MIT"
+}

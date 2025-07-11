@@ -1,0 +1,67 @@
+# 环境变量文件 / Environment variables file
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+
+# 依赖目录 / Dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+yarn.lock
+
+# 运行时文件 / Runtime files
+*.log
+*.pid
+*.seed
+*.pid.lock
+
+# 覆盖率目录 / Coverage directory
+coverage/
+.nyc_output
+
+# 构建输出 / Build output
+dist/
+build/
+out/
+
+# 缓存文件 / Cache files
+.cache/
+.parcel-cache/
+.eslintcache
+
+# IDE配置文件 / IDE configuration files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 操作系统生成的文件 / OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# 临时文件 / Temporary files
+tmp/
+temp/
+*.tmp
+*.temp
+
+# API密钥和敏感信息 / API keys and sensitive information
+config/local.json
+secrets/
+*.key
+*.pem
+*.p12
+*.pfx
+
+# 用户特定配置 / User-specific configuration
+.npmrc
