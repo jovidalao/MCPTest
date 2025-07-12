@@ -131,38 +131,42 @@ async function callTool(toolName, args) {
  */
 async function demonstrateFeatures() {
   try {
-    console.log('\n🚀 开始演示MCP功能... / Starting MCP feature demonstration...');
+    console.log('\n🚀 开始演示AI结果验证功能... / Starting AI result verification demonstration...');
 
-    // 1. 文本生成演示 / Text generation demo
-    console.log('\n=== 文本生成演示 / Text Generation Demo ===');
-    await callTool('generate_text', {
-      prompt: 'Explain what MCP (Model Context Protocol) is in simple terms.'
-    });
-
-    // 2. 文本翻译演示 / Text translation demo
-    console.log('\n=== 文本翻译演示 / Text Translation Demo ===');
-    await callTool('translate_text', {
-      text: 'Hello, how are you today? I hope you are having a great day!',
-      target_language: '中文'
-    });
-
-    // 3. 文本总结演示 / Text summarization demo
-    console.log('\n=== 文本总结演示 / Text Summarization Demo ===');
-    const longText = `
-    人工智能（Artificial Intelligence，AI）是计算机科学的一个分支，它企图了解智能的实质，
-    并生产出一种新的能以人类智能相似的方式做出反应的智能机器。该领域的研究包括机器人、
-    语言识别、图像识别、自然语言处理和专家系统等。人工智能从诞生以来，理论和技术日益成熟，
-    应用领域也不断扩大。可以设想，未来人工智能带来的科技产品，将会是人类智慧的"容器"。
-    人工智能可以对人的意识、思维的信息过程的模拟。人工智能不是人的智能，但能像人那样思考、
-    也可能超过人的智能。目前，人工智能已经在医疗、教育、交通、金融等多个领域得到广泛应用。
-    `;
+    // 演示场景1：验证编程代码解释 / Demo scenario 1: Verify code explanation
+    console.log('\n=== 场景1：验证编程代码解释 / Scenario 1: Verify Code Explanation ===');
+    const prompt1 = '请解释这段JavaScript代码：const arr = [1, 2, 3]; const doubled = arr.map(x => x * 2);';
+    const claudeResult1 = '这段代码先定义了一个包含[1, 2, 3]的数组，然后使用map方法将每个元素乘以2，结果是[2, 4, 6]。map方法不会修改原数组，而是返回一个新数组。';
     
-    await callTool('summarize_text', {
-      text: longText,
-      max_length: 50
+    await callTool('verify_ai_result', {
+      original_prompt: prompt1,
+      claude_result: claudeResult1,
+      verification_criteria: 'accuracy,completeness,clarity'
     });
 
-    console.log('\n🎉 所有功能演示完成！/ All feature demonstrations completed!');
+    // 演示场景2：验证科学解释 / Demo scenario 2: Verify scientific explanation
+    console.log('\n=== 场景2：验证科学解释 / Scenario 2: Verify Scientific Explanation ===');
+    const prompt2 = '什么是光合作用？请简单解释。';
+    const claudeResult2 = '光合作用是植物利用太阳光能、二氧化碳和水制造葡萄糖和氧气的过程。这个过程发生在叶绿体中，对地球生命至关重要。';
+    
+    await callTool('verify_ai_result', {
+      original_prompt: prompt2,
+      claude_result: claudeResult2,
+      verification_criteria: 'accuracy,completeness'
+    });
+
+    // 演示场景3：验证数学问题解答 / Demo scenario 3: Verify math problem solution
+    console.log('\n=== 场景3：验证数学问题解答 / Scenario 3: Verify Math Problem Solution ===');
+    const prompt3 = '解方程：2x + 5 = 13，求x的值。';
+    const claudeResult3 = '解：\n2x + 5 = 13\n2x = 13 - 5\n2x = 8\nx = 4\n\n验证：2(4) + 5 = 8 + 5 = 13 ✓';
+    
+    await callTool('verify_ai_result', {
+      original_prompt: prompt3,
+      claude_result: claudeResult3,
+      verification_criteria: 'accuracy,completeness,clarity'
+    });
+
+    console.log('\n🎉 AI结果验证演示完成！/ AI result verification demonstration completed!');
   } catch (error) {
     console.error('演示过程中发生错误 / Error during demonstration:', error);
   }
@@ -193,7 +197,7 @@ function test(name, testFunction) {
  * 执行完整的MCP功能测试，验证所有工具的正确性 / Execute comprehensive MCP functionality tests
  */
 async function runTests() {
-  console.log('🚀 开始MCP功能测试... / Starting MCP functionality tests...');
+  console.log('🚀 开始AI验证功能测试... / Starting AI verification functionality tests...');
   
   try {
     // 测试1: 获取工具列表 / Test 1: Get tools list
@@ -204,12 +208,12 @@ async function runTests() {
         throw new Error('工具列表格式错误 / Invalid tools list format');
       }
       
-      if (response.tools.length !== 3) {
-        throw new Error(`期望3个工具，实际得到${response.tools.length}个 / Expected 3 tools, got ${response.tools.length}`);
+      if (response.tools.length !== 1) {
+        throw new Error(`期望1个工具，实际得到${response.tools.length}个 / Expected 1 tool, got ${response.tools.length}`);
       }
       
       const toolNames = response.tools.map(tool => tool.name);
-      const expectedTools = ['generate_text', 'translate_text', 'summarize_text'];
+      const expectedTools = ['verify_ai_result'];
       
       for (const expectedTool of expectedTools) {
         if (!toolNames.includes(expectedTool)) {
@@ -220,81 +224,7 @@ async function runTests() {
       console.log(`  找到${response.tools.length}个工具 / Found ${response.tools.length} tools:`, toolNames.join(', '));
     });
 
-    // 测试2: 文本生成功能 / Test 2: Text generation functionality
-    await test('文本生成功能 / Text generation functionality', async () => {
-      const response = await client.callTool({
-        name: 'generate_text',
-        arguments: {
-          prompt: 'Say hello in a friendly way.'
-        }
-      });
-      
-      if (!response.content || !Array.isArray(response.content)) {
-        throw new Error('响应格式错误 / Invalid response format');
-      }
-      
-      if (response.content.length === 0) {
-        throw new Error('响应内容为空 / Empty response content');
-      }
-      
-      const textContent = response.content.find(c => c.type === 'text');
-      if (!textContent || !textContent.text) {
-        throw new Error('未找到文本内容 / No text content found');
-      }
-      
-      console.log(`  生成文本长度 / Generated text length: ${textContent.text.length} 字符`);
-    });
-
-    // 测试3: 翻译功能 / Test 3: Translation functionality  
-    await test('翻译功能 / Translation functionality', async () => {
-      const response = await client.callTool({
-        name: 'translate_text',
-        arguments: {
-          text: 'Good morning!',
-          target_language: 'Chinese'
-        }
-      });
-      
-      if (!response.content || response.content.length === 0) {
-        throw new Error('翻译响应为空 / Translation response is empty');
-      }
-      
-      const textContent = response.content.find(c => c.type === 'text');
-      if (!textContent || !textContent.text) {
-        throw new Error('翻译结果无效 / Invalid translation result');
-      }
-      
-      console.log(`  翻译结果包含中文字符 / Translation contains Chinese characters: ${/[\u4e00-\u9fff]/.test(textContent.text)}`);
-    });
-
-    // 测试4: 总结功能 / Test 4: Summarization functionality
-    await test('总结功能 / Summarization functionality', async () => {
-      const longText = 'This is a very long text that needs to be summarized. ' +
-                      'It contains multiple sentences and ideas. ' +
-                      'The summarization tool should be able to condense this into a shorter format. ' +
-                      'This is important for understanding how the MCP server handles text processing tasks.';
-      
-      const response = await client.callTool({
-        name: 'summarize_text',
-        arguments: {
-          text: longText,
-          max_length: 30
-        }
-      });
-      
-      if (!response.content || response.content.length === 0) {
-        throw new Error('总结响应为空 / Summary response is empty');
-      }
-      
-      const textContent = response.content.find(c => c.type === 'text');
-      if (!textContent || !textContent.text) {
-        throw new Error('总结结果无效 / Invalid summary result');
-      }
-      
-      console.log(`  总结文本长度 / Summary text length: ${textContent.text.length} 字符`);
-    });
-
-    // 测试5: 错误处理 / Test 5: Error handling
+    // 测试3: 错误处理 / Test 3: Error handling
     await test('错误处理 / Error handling', async () => {
       try {
         await client.callTool({
@@ -392,7 +322,7 @@ async function main() {
         break;
         
       case 'test':
-        console.log('🧪 运行测试模式... / Running test mode...');
+        console.log('🧪 运行验证功能测试模式... / Running verification functionality test mode...');
         await runTests();
         break;
         

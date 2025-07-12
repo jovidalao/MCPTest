@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 
 /**
- * MCP Gemini AI 服务器 - 为Claude提供AI文本处理能力
- * MCP Gemini AI Server - Provides AI text processing capabilities for Claude
+ * MCP Gemini AI 验证服务器 - 使用Gemini验证Claude生成结果的准确性
+ * MCP Gemini AI Verification Server - Uses Gemini to verify accuracy of Claude-generated results
  * 
  * MCP协议核心组件 / MCP Protocol Core Components:
  * - Server: 处理Claude的连接和请求 / Handles Claude's connections and requests  
- * - Tools: 提供文本生成、翻译、总结功能 / Provides text generation, translation, summarization
+ * - Tools: 提供AI结果验证功能 / Provides AI result verification functionality
  * - Transport: 通过stdio与Claude通信 / Communicates with Claude via stdio
  */
 
@@ -74,36 +74,20 @@ async function callGeminiAPI(prompt, systemInstruction = '') {
 server.setRequestHandler(ListToolsRequestSchema, async () => ({
   tools: [
     {
-      name: 'generate_text',
-      description: '使用Gemini AI生成文本',
-      inputSchema: {
-        type: 'object',
-        properties: { prompt: { type: 'string', description: '文本生成提示' } },
-        required: ['prompt']
-      }
-    },
-    {
-      name: 'translate_text', 
-      description: '使用Gemini AI翻译文本',
+      name: 'verify_ai_result',
+      description: '使用Gemini AI验证Claude生成结果的准确性和质量',
       inputSchema: {
         type: 'object',
         properties: {
-          text: { type: 'string', description: '要翻译的文本' },
-          target_language: { type: 'string', description: '目标语言' }
+          original_prompt: { type: 'string', description: '原始提示或问题' },
+          claude_result: { type: 'string', description: 'Claude生成的结果' },
+          verification_criteria: { 
+            type: 'string', 
+            description: '验证标准（可选）：accuracy, completeness, relevance, clarity等',
+            default: 'accuracy,completeness,relevance'
+          }
         },
-        required: ['text', 'target_language']
-      }
-    },
-    {
-      name: 'summarize_text',
-      description: '使用Gemini AI总结文本', 
-      inputSchema: {
-        type: 'object',
-        properties: {
-          text: { type: 'string', description: '要总结的文本' },
-          max_length: { type: 'number', description: '最大字数', default: 100 }
-        },
-        required: ['text']
+        required: ['original_prompt', 'claude_result']
       }
     }
   ]
@@ -116,43 +100,40 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   try {
     // 根据工具名称执行相应的处理逻辑 / Execute corresponding logic based on tool name
     switch (name) {
-      case 'generate_text': {
-        // 文本生成工具 / Text generation tool
-        const { prompt } = args;
+      case 'verify_ai_result': {
+        // AI结果验证工具 / AI result verification tool
+        const { original_prompt, claude_result, verification_criteria = 'accuracy,completeness,relevance' } = args;
+        
         // 验证参数类型 / Validate parameter types
-        if (typeof prompt !== 'string') {
-          throw new McpError(ErrorCode.InvalidParams, '提示必须是字符串 / Prompt must be a string');
+        if (typeof original_prompt !== 'string' || typeof claude_result !== 'string') {
+          throw new McpError(ErrorCode.InvalidParams, '原始提示和Claude结果必须是字符串 / Original prompt and Claude result must be strings');
         }
-        // 调用Gemini API生成文本 / Call Gemini API to generate text
-        const result = await callGeminiAPI(prompt);
-        return { content: [{ type: 'text', text: result }] };
-      }
+        
+        // 构建验证提示 / Build verification prompt
+        const verificationPrompt = `
+请作为一个专业的AI输出质量评估专家，分析以下Claude生成的结果：
 
-      case 'translate_text': {
-        // 文本翻译工具 / Text translation tool
-        const { text, target_language } = args;
-        // 验证参数类型 / Validate parameter types
-        if (typeof text !== 'string' || typeof target_language !== 'string') {
-          throw new McpError(ErrorCode.InvalidParams, '文本和目标语言必须是字符串 / Text and target language must be strings');
-        }
-        // 构建翻译提示 / Build translation prompt
-        const prompt = `请将以下文本翻译成${target_language}：\n${text}`;
-        // 使用专门的翻译指令调用API / Call API with specialized translation instruction
-        const result = await callGeminiAPI(prompt, '你是翻译助手，只返回翻译结果。');
-        return { content: [{ type: 'text', text: result }] };
-      }
+原始问题/提示：
+${original_prompt}
 
-      case 'summarize_text': {
-        // 文本总结工具 / Text summarization tool
-        const { text, max_length = 100 } = args;
-        // 验证参数类型 / Validate parameter types
-        if (typeof text !== 'string') {
-          throw new McpError(ErrorCode.InvalidParams, '文本必须是字符串 / Text must be a string');
-        }
-        // 构建总结提示 / Build summarization prompt
-        const prompt = `请总结以下文本，限制在${max_length}字以内：\n${text}`;
-        // 使用专门的总结指令调用API / Call API with specialized summarization instruction
-        const result = await callGeminiAPI(prompt, '你是总结助手，提供简洁准确的总结。');
+Claude的回答：
+${claude_result}
+
+请根据以下标准进行评估：${verification_criteria}
+
+请提供详细的验证报告，包括：
+1. 准确性分析（是否回答了问题，信息是否正确）
+2. 完整性分析（是否遗漏重要信息）
+3. 相关性分析（回答是否切题）
+4. 建议改进（如有问题，请提出具体改进建议）
+5. 总体评分（1-10分）
+
+请以结构化的方式回复。`;
+        
+        // 使用专门的验证指令调用API / Call API with specialized verification instruction
+        const systemInstruction = '你是一个专业的AI输出质量评估专家，负责客观、全面地评估AI生成内容的质量。请提供详细、准确、有建设性的反馈。';
+        const result = await callGeminiAPI(verificationPrompt, systemInstruction);
+        
         return { content: [{ type: 'text', text: result }] };
       }
 
@@ -177,7 +158,7 @@ async function main() {
   // 连接服务器到传输层 / Connect server to transport layer
   await server.connect(transport);
   // 输出启动信息到stderr（避免干扰MCP通信）/ Output startup info to stderr (avoid interfering with MCP communication)
-  console.error('Gemini AI MCP服务器已启动 / Gemini AI MCP Server started');
+  console.error('Gemini AI 验证服务器已启动 / Gemini AI Verification Server started');
 }
 
 // 错误处理 / Error Handling

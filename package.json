@@ -1,7 +1,7 @@
 {
   "name": "mcp-gemini-demo",
   "version": "1.0.0",
-  "description": "MCP server and client demo with Gemini AI integration",
+  "description": "MCP server and client for AI result verification using Gemini AI",
   "main": "server.js",
   "type": "module",
   "scripts": {
