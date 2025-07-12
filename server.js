@@ -1,25 +1,43 @@
 #!/usr/bin/env node
 
-// MCP服务器 - 集成Gemini AI的演示服务器
-// MCP Server - Demo server with Gemini AI integration
+/**
+ * MCP服务器 - 集成Gemini AI的演示服务器
+ * MCP Server - Demo server with Gemini AI integration
+ * 
+ * 本文件实现了完整的MCP (Model Context Protocol) 服务器
+ * This file implements a complete MCP (Model Context Protocol) server
+ * 
+ * MCP协议核心组件说明 / MCP Protocol Core Components:
+ * 1. Server: MCP服务器实例，处理客户端连接和请求路由 / MCP server instance that handles client connections and request routing
+ * 2. Transport: 传输层，这里使用stdio进行进程间通信 / Transport layer, using stdio for inter-process communication
+ * 3. Tools: 工具定义和执行，提供给客户端调用的功能 / Tool definitions and execution, providing functionality for client invocation
+ * 4. Request Handlers: 请求处理器，响应MCP协议的标准请求类型 / Request handlers that respond to standard MCP protocol request types
+ */
 
+// MCP协议核心SDK导入 / MCP Protocol Core SDK Imports
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import {
-  CallToolRequestSchema,
-  ErrorCode,
-  ListToolsRequestSchema,
-  McpError,
+  CallToolRequestSchema,     // 工具调用请求模式 / Tool call request schema
+  ErrorCode,                // MCP标准错误码 / MCP standard error codes  
+  ListToolsRequestSchema,   // 工具列表请求模式 / Tools list request schema
+  McpError,                // MCP错误类型 / MCP error type
 } from '@modelcontextprotocol/sdk/types.js';
+
+// 外部依赖 / External Dependencies
 import fetch from 'node-fetch';
 import dotenv from 'dotenv';
 
 // 加载环境变量 / Load environment variables
 dotenv.config();
 
+// ========================================
+// 配置和初始化 / Configuration and Initialization
+// ========================================
+
 // Gemini API配置 / Gemini API Configuration
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
+const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
 
 // 检查API密钥是否存在 / Check if API key exists
 if (!GEMINI_API_KEY) {
@@ -29,56 +47,85 @@ if (!GEMINI_API_KEY) {
   process.exit(1);
 }
 
-// 创建MCP服务器实例 / Create MCP server instance
-const server = new Server(
-  {
-    name: 'gemini-ai-server',
-    version: '1.0.0',
-  },
-  {
-    capabilities: {
-      tools: {}, // 声明支持工具功能 / Declare tool capabilities
-    },
-  }
-);
+// ========================================
+// 工具函数 / Utility Functions  
+// ========================================
 
-// 延迟函数 / Delay function
+/**
+ * 延迟函数 / Delay function
+ * @param {number} ms - 延迟毫秒数 / Delay in milliseconds
+ * @returns {Promise} Promise that resolves after the delay
+ */
 function delay(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-// 简单的速率限制器 / Simple rate limiter
-class RateLimiter {
-  constructor(maxRequests = 10, windowMs = 60000) { // 默认每分钟10次 / Default 10 requests per minute
-    this.maxRequests = maxRequests;
-    this.windowMs = windowMs;
-    this.requests = [];
-  }
-
+/**
+ * 简单的速率限制器 / Simple rate limiter
+ * 防止API调用过于频繁 / Prevents API calls from being too frequent
+ */
+const rateLimiter = {
+  lastCallTime: 0,
+  minInterval: 100, // 最小间隔100ms / Minimum interval 100ms
+  
   async checkRateLimit() {
     const now = Date.now();
+    const timeSinceLastCall = now - this.lastCallTime;
     
-    // 清理过期的请求记录 / Clear expired request records
-    this.requests = this.requests.filter(timestamp => now - timestamp < this.windowMs);
-    
-    if (this.requests.length >= this.maxRequests) {
-      const oldestRequest = Math.min(...this.requests);
-      const waitTime = this.windowMs - (now - oldestRequest);
-      console.warn(`速率限制：等待 ${waitTime}ms / Rate limit: waiting ${waitTime}ms`);
+    if (timeSinceLastCall < this.minInterval) {
+      const waitTime = this.minInterval - timeSinceLastCall;
       await delay(waitTime);
-      return this.checkRateLimit(); // 递归检查 / Recursive check
     }
     
-    // 记录当前请求 / Record current request
-    this.requests.push(now);
-    return true;
+    this.lastCallTime = Date.now();
   }
-}
+};
 
-// 创建速率限制器实例 / Create rate limiter instance
-const rateLimiter = new RateLimiter(15, 60000); // 每分钟15次请求 / 15 requests per minute
+// ========================================
+// MCP服务器初始化 / MCP Server Initialization
+// ========================================
 
-// 调用Gemini API的通用函数（带重试机制和速率限制） / Generic function to call Gemini API (with retry logic and rate limiting)
+/**
+ * 创建MCP服务器实例 / Create MCP server instance
+ * 
+ * MCP服务器是整个协议的核心，负责：
+ * The MCP server is the core of the protocol, responsible for:
+ * 1. 处理客户端连接 / Handling client connections
+ * 2. 路由请求到适当的处理器 / Routing requests to appropriate handlers  
+ * 3. 管理服务器能力声明 / Managing server capability declarations
+ * 4. 维护会话状态 / Maintaining session state
+ */
+const server = new Server(
+  {
+    name: 'gemini-ai-server',    // 服务器标识符 / Server identifier
+    version: '1.0.0',           // 服务器版本 / Server version
+  },
+  {
+    capabilities: {
+      tools: {},                 // 声明支持工具功能 / Declare tool capabilities
+                                // 这告诉MCP客户端此服务器可以执行工具 / This tells MCP clients this server can execute tools
+    },
+  }
+);
+
+// ========================================
+// 外部API集成 / External API Integration
+// ========================================
+
+/**
+ * 调用Gemini API的通用函数（带重试机制和速率限制）
+ * Generic function to call Gemini API (with retry logic and rate limiting)
+ * 
+ * 这个函数封装了与外部AI服务的交互，虽然不是MCP协议的一部分，
+ * 但它为MCP工具提供了底层能力支持
+ * This function encapsulates interaction with external AI services. While not part of the MCP protocol,
+ * it provides underlying capability support for MCP tools
+ * 
+ * @param {string} prompt - 用户提示 / User prompt
+ * @param {string} systemInstruction - 系统指令 / System instruction  
+ * @param {number} retries - 重试次数 / Number of retries
+ * @returns {Promise<string>} AI生成的回复 / AI generated response
+ */
 async function callGeminiAPI(prompt, systemInstruction = '', retries = 3) {
   // 检查速率限制 / Check rate limit
   await rateLimiter.checkRateLimit();
@@ -162,7 +209,25 @@ async function callGeminiAPI(prompt, systemInstruction = '', retries = 3) {
   throw lastError;
 }
 
-// 处理工具列表请求 / Handle list tools request
+// ========================================
+// MCP协议请求处理器 / MCP Protocol Request Handlers
+// ========================================
+
+/**
+ * 处理工具列表请求 / Handle list tools request
+ * 
+ * 这是MCP协议中的标准请求类型之一：tools/list
+ * This is one of the standard request types in MCP protocol: tools/list
+ * 
+ * 当MCP客户端想要了解服务器提供哪些工具时，会发送此请求
+ * When MCP clients want to discover what tools the server provides, they send this request
+ * 
+ * 响应必须包含tools数组，每个工具包含：
+ * Response must contain a tools array, each tool includes:
+ * - name: 工具名称 / Tool name
+ * - description: 工具描述 / Tool description  
+ * - inputSchema: JSON Schema定义输入参数 / JSON Schema defining input parameters
+ */
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
     tools: [
@@ -221,14 +286,41 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
   };
 });
 
-// 处理工具调用请求 / Handle tool call requests
+/**
+ * 处理工具调用请求 / Handle tool call requests
+ * 
+ * 这是MCP协议中的另一个标准请求类型：tools/call
+ * This is another standard request type in MCP protocol: tools/call
+ * 
+ * 当MCP客户端想要执行特定工具时，会发送此请求
+ * When MCP clients want to execute a specific tool, they send this request
+ * 
+ * 请求包含：
+ * Request includes:
+ * - name: 要调用的工具名称 / Name of tool to call
+ * - arguments: 工具参数对象 / Tool arguments object
+ * 
+ * 响应必须包含：
+ * Response must include:
+ * - content: 内容数组，包含工具执行结果 / Content array containing tool execution results
+ * - isError: (可选) 指示是否发生错误 / (Optional) indicates if an error occurred
+ */
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
 
   try {
     switch (name) {
       case 'generate_text': {
-        // 文本生成工具 / Text generation tool
+        /**
+         * 文本生成工具实现 / Text generation tool implementation
+         * 
+         * MCP工具的标准实现模式：
+         * Standard implementation pattern for MCP tools:
+         * 1. 参数验证 / Parameter validation
+         * 2. 业务逻辑执行 / Business logic execution  
+         * 3. 结果格式化 / Result formatting
+         * 4. 错误处理 / Error handling
+         */
         const { prompt } = args;
         if (typeof prompt !== 'string') {
           throw new McpError(ErrorCode.InvalidParams, '提示必须是字符串 / Prompt must be a string');
@@ -237,10 +329,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         try {
           const result = await callGeminiAPI(prompt);
           
+          // MCP标准响应格式 / MCP standard response format
           return {
-            content: [
+            content: [              // content数组是MCP协议要求的 / content array is required by MCP protocol
               {
-                type: 'text',
+                type: 'text',       // 内容类型：text | image | resource / Content type: text | image | resource
                 text: `生成的文本 / Generated text:\n${result}`,
               },
             ],
@@ -253,6 +346,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             ? '⚠️ API调用频率过高，请稍后重试 / API rate limit exceeded, please try again later'
             : `❌ API调用失败 / API call failed: ${error.message}`;
             
+          // 错误情况下的MCP响应格式 / MCP response format for error cases
           return {
             content: [
               {
@@ -260,12 +354,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 text: errorMessage,
               },
             ],
+            // 注意：可以添加 isError: true 来明确标识错误状态
+            // Note: could add isError: true to explicitly mark error state
           };
         }
       }
 
       case 'translate_text': {
-        // 文本翻译工具 / Text translation tool
+        // 文本翻译工具实现 / Text translation tool implementation
         const { text, target_language } = args;
         if (typeof text !== 'string' || typeof target_language !== 'string') {
           throw new McpError(ErrorCode.InvalidParams, '文本和目标语言必须是字符串 / Text and target language must be strings');
@@ -304,7 +400,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case 'summarize_text': {
-        // 文本总结工具 / Text summarization tool
+        // 文本总结工具实现 / Text summarization tool implementation
         const { text, max_length = 100 } = args;
         if (typeof text !== 'string') {
           throw new McpError(ErrorCode.InvalidParams, '文本必须是字符串 / Text must be a string');
@@ -343,31 +439,65 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       default:
+        // MCP协议错误处理：工具不存在 / MCP protocol error handling: tool not found
         throw new McpError(ErrorCode.MethodNotFound, `未知工具 / Unknown tool: ${name}`);
     }
   } catch (error) {
     console.error(`工具执行错误 / Tool execution error [${name}]:`, error);
+    // MCP协议错误处理：内部错误 / MCP protocol error handling: internal error
     throw new McpError(ErrorCode.InternalError, `工具执行失败 / Tool execution failed: ${error.message}`);
   }
 });
 
-// 启动服务器 / Start the server
+// ========================================
+// MCP服务器启动和传输层 / MCP Server Startup and Transport Layer
+// ========================================
+
+/**
+ * 启动服务器主函数 / Main server startup function
+ * 
+ * MCP传输层说明 / MCP Transport Layer Explanation:
+ * MCP协议支持多种传输方式，这里使用stdio（标准输入输出）
+ * MCP protocol supports multiple transport methods, here we use stdio (standard input/output)
+ * 
+ * stdio传输的工作原理：
+ * How stdio transport works:
+ * 1. 服务器通过stdin接收来自客户端的JSON-RPC消息 / Server receives JSON-RPC messages from client via stdin
+ * 2. 服务器通过stdout发送响应给客户端 / Server sends responses to client via stdout  
+ * 3. stderr用于日志输出，不影响协议通信 / stderr is used for logging, doesn't affect protocol communication
+ */
 async function main() {
-  // 创建标准输入输出传输 / Create stdio transport
+  // 创建标准输入输出传输层实例 / Create stdio transport layer instance
   const transport = new StdioServerTransport();
   
-  // 连接服务器和传输 / Connect server and transport
+  // 连接MCP服务器和传输层 / Connect MCP server and transport layer
+  // 这建立了服务器与客户端之间的通信通道 / This establishes communication channel between server and client
   await server.connect(transport);
   
   console.error('Gemini AI MCP服务器已启动 / Gemini AI MCP server started');
 }
 
-// 处理未捕获的错误 / Handle uncaught errors
+// ========================================
+// 错误处理和进程管理 / Error Handling and Process Management
+// ========================================
+
+/**
+ * 全局错误处理 / Global error handling
+ * 
+ * 对于MCP服务器，正确的错误处理非常重要：
+ * For MCP servers, proper error handling is crucial:
+ * 1. 防止服务器意外崩溃中断客户端连接 / Prevent server crashes that interrupt client connections
+ * 2. 确保错误信息被正确记录 / Ensure error information is properly logged
+ * 3. 在必要时优雅地关闭服务器 / Gracefully shut down server when necessary
+ */
+
+// 处理未捕获的同步异常 / Handle uncaught synchronous exceptions
 process.on('uncaughtException', (error) => {
   console.error('未捕获的异常 / Uncaught exception:', error);
   process.exit(1);
 });
 
+// 处理未处理的Promise拒绝 / Handle unhandled Promise rejections
 process.on('unhandledRejection', (reason, promise) => {
   console.error('未处理的Promise拒绝 / Unhandled promise rejection:', reason);
   process.exit(1);
