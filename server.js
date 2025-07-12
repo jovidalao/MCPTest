@@ -51,7 +51,6 @@ async function callGeminiAPI(prompt, systemInstruction = '') {
       }]
     };
 
-    console.error(`[DEBUG] 调用Gemini API, 请求长度: ${JSON.stringify(requestBody).length}`);
 
     // 发送HTTP请求到Gemini API / Send HTTP request to Gemini API
     const response = await fetch(GEMINI_API_URL, {
@@ -67,16 +66,15 @@ async function callGeminiAPI(prompt, systemInstruction = '') {
     // 检查响应状态 / Check response status
     if (!response.ok) {
       const errorText = await response.text();
-      console.error(`[ERROR] Gemini API错误: ${response.status} ${response.statusText}`, errorText);
+      console.error(`Gemini API错误: ${response.status} ${response.statusText}`);
       throw new Error(`Gemini API错误: ${response.status} ${response.statusText}`);
     }
 
     // 解析响应并提取文本 / Parse response and extract text
     const data = await response.json();
-    console.error(`[DEBUG] Gemini API响应成功`);
     return data.candidates?.[0]?.content?.parts?.[0]?.text || '无法获取响应';
   } catch (error) {
-    console.error(`[ERROR] callGeminiAPI失败:`, error.message);
+    console.error('Gemini API调用失败:', error.message);
     // 不要重新抛出错误，而是返回错误信息
     return `验证服务暂时不可用: ${error.message}`;
   }
@@ -142,13 +140,9 @@ ${claude_result}
 
 请以结构化的方式回复。`;
         
-        console.error(`[DEBUG] 开始验证AI结果`);
-        
         // 使用专门的验证指令调用API / Call API with specialized verification instruction
         const systemInstruction = '你是一个专业的AI输出质量评估专家，负责客观、全面地评估AI生成内容的质量。请提供详细、准确、有建设性的反馈。';
         const result = await callGeminiAPI(verificationPrompt, systemInstruction);
-        
-        console.error(`[DEBUG] 验证完成，结果长度: ${result.length}`);
         
         return { content: [{ type: 'text', text: result }] };
       }
@@ -179,36 +173,23 @@ async function main() {
 
 // 错误处理 / Error Handling
 process.on('uncaughtException', (error) => {
-  console.error('[FATAL] 未捕获异常:', error);
-  // 不要立即退出，给MCP客户端时间处理
+  console.error('未捕获异常:', error);
   setTimeout(() => process.exit(1), 1000);
 });
 
 process.on('unhandledRejection', (reason) => {
-  console.error('[FATAL] 未处理的Promise拒绝:', reason);
-  // 不要立即退出，给MCP客户端时间处理
+  console.error('未处理的Promise拒绝:', reason);
   setTimeout(() => process.exit(1), 1000);
 });
 
 // 优雅关闭处理 / Graceful shutdown handling
 process.on('SIGINT', async () => {
-  console.error('[INFO] 收到SIGINT信号，正在关闭服务器...');
-  try {
-    // 给正在进行的请求一些时间完成
-    await new Promise(resolve => setTimeout(resolve, 2000));
-  } catch (error) {
-    console.error('[ERROR] 关闭过程中出错:', error);
-  }
+  console.error('正在关闭服务器...');
   process.exit(0);
 });
 
 process.on('SIGTERM', async () => {
-  console.error('[INFO] 收到SIGTERM信号，正在关闭服务器...');
-  try {
-    await new Promise(resolve => setTimeout(resolve, 2000));
-  } catch (error) {
-    console.error('[ERROR] 关闭过程中出错:', error);
-  }
+  console.error('正在关闭服务器...');
   process.exit(0);
 });
 

@@ -13,7 +13,7 @@
   "mcpServers": {
     "gemini-verification": {
       "command": "node",
-      "args": ["server.js"],
+      "args": ["/Users/jovi/Code/test1/MCPTest/server.js"],
       "cwd": "/Users/jovi/Code/test1/MCPTest",
       "env": {
         "GEMINI_API_KEY": "你的Gemini_API_密钥"
@@ -23,12 +23,23 @@
 }
 ```
 
+**重要**: 将 `/Users/jovi/Code/test1/MCPTest` 替换为你的实际项目路径。
+
 ### 3. 获取 Gemini API 密钥
 1. 访问 [Google AI Studio](https://makersuite.google.com/app/apikey)
 2. 创建新的 API 密钥
 3. 复制密钥并替换配置中的 `你的Gemini_API_密钥`
 
-### 4. 重启 Claude
+### 4. 验证配置
+在配置前，先测试服务器是否工作：
+```bash
+cd /Users/jovi/Code/test1/MCPTest
+GEMINI_API_KEY=你的密钥 node client.js connect
+```
+
+如果看到 "MCP连接正常" 消息，说明配置正确。
+
+### 5. 重启 Claude
 配置完成后，完全退出并重新启动 Claude macOS 应用。
 
 ## 🧪 测试配置
@@ -60,20 +71,22 @@ Claude：我来使用 Gemini AI 验证服务检查我刚才的回答质量...
 
 ## 🛠️ 故障排除
 
-### 常见问题
+### 常见问题和解决方案
 
-1. **"Server disconnected"**
-   - 检查 `cwd` 路径是否正确
-   - 确保 `GEMINI_API_KEY` 有效
-   - 检查 Node.js 版本兼容性
+1. **"Cannot find module '/server.js'"**
+   - 确保使用了绝对路径：`"/完整路径/server.js"`
+   - 检查 `cwd` 路径是否正确指向项目目录
+   - 验证文件是否存在
 
-2. **"找不到工具"**
+2. **"Server disconnected"**
+   - 检查 `GEMINI_API_KEY` 是否有效（应以 `AIzaSy` 开头）
+   - 确保项目目录中的文件完整
    - 运行 `node client.js connect` 测试连接
-   - 检查服务器是否正常启动
 
-3. **权限错误**
-   - 确保 Claude 有访问项目目录的权限
-   - 检查文件路径是否正确
+3. **"找不到工具"**
+   - 检查服务器是否正常启动
+   - 查看 Claude Desktop 的 MCP 日志
+   - 确认 API 密钥权限
 
 ### 调试信息
 服务器运行时会输出调试信息到 stderr，可以在终端中查看：
