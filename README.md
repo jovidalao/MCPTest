@@ -39,7 +39,7 @@ MCPTest/
 ├── server.js             # Multi-provider MCP server implementation
 ├── test-client.js        # Simple test client for functionality verification
 ├── .env.example          # Environment variables template
-├── CLAUDE_SETUP.md       # Claude Desktop configuration guide
+├── MCP_CLIENT_SETUP.md   # MCP client configuration guide
 └── README.md             # Project documentation
 ```
 
@@ -47,17 +47,19 @@ MCPTest/
 
 ### 1. Installation
 ```bash
-git clone <repository-url>
+git clone https://github.com/jovidalao/MCPTest.git
 cd MCPTest
 npm install
 ```
 
 ### 2. Configure AI Provider
 Copy `.env.example` to `.env` and configure your preferred AI provider:
+```bash
+cp .env.example .env
+```
 
 #### Option A: Use Gemini (Default)
 ```bash
-cp .env.example .env
 # Edit .env:
 AI_PROVIDER=gemini
 GEMINI_API_KEY=your_gemini_api_key_here
@@ -66,7 +68,6 @@ Get your Gemini API key from [Google AI Studio](https://aistudio.google.com/app/
 
 #### Option B: Use OpenAI
 ```bash
-cp .env.example .env
 # Edit .env:
 AI_PROVIDER=openai
 OPENAI_API_KEY=your_openai_api_key_here
@@ -76,7 +77,6 @@ Get your OpenAI API key from [OpenAI Platform](https://platform.openai.com/api-k
 
 #### Option C: Use Custom OpenAI-Compatible Service
 ```bash
-cp .env.example .env
 # Edit .env:
 AI_PROVIDER=openai
 OPENAI_API_KEY=your_api_key
