@@ -40,6 +40,9 @@ out/
 *.swo
 *~
 
+# Claude Code 内部文档 / Claude Code internal documentation
+CLAUDE.md
+
 # 操作系统生成的文件 / OS generated files
 .DS_Store
 .DS_Store?
