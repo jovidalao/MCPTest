@@ -342,7 +342,7 @@ MIT License
 
 ### 1. 安装
 ```bash
-git clone <repository-url>
+git clone https://github.com/jovidalao/MCPTest.git
 cd MCPTest
 npm install
 ```
